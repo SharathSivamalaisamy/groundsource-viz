@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Flash Floods 2000–2026</title>
+<script src="https://unpkg.com/deck.gl@9.0.16/dist.min.js"></script>
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+  #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+  /* Stats bar — top */
+  #stats {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 48px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+    z-index: 10;
+  }
+  #stats * { pointer-events: none; }
+  #title a { pointer-events: auto; }
+    color: rgba(255,255,255,0.85); font-size: 15px; font-weight: 500;
+    letter-spacing: 0.5px; text-decoration: none;
+    transition: color 0.2s;
+  }
+  #title a:hover { color: #fff; }
+  #counter {
+    color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 400;
+  }
+  #counter span { color: #fff; font-weight: 600; }
+
+  /* Controls bar — bottom */
+  #controls {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 64px;
+    background: linear-gradient(0deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%);
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 0 24px;
+    z-index: 10;
+  }
+
+  #play-btn {
+    width: 36px; height: 36px; border: none; border-radius: 50%;
+    background: rgba(255,255,255,0.15); color: #fff;
+    font-size: 14px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  #play-btn:hover { background: rgba(255,255,255,0.25); }
+
+  #year-label {
+    color: rgba(255,255,255,0.6); font-size: 13px; width: 36px;
+    text-align: center; flex-shrink: 0;
+  }
+
+  #slider {
+    -webkit-appearance: none; appearance: none;
+    width: min(500px, 60vw); height: 4px;
+    background: rgba(255,255,255,0.2); border-radius: 2px;
+    outline: none; cursor: pointer;
+  }
+  #slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; cursor: pointer;
+    box-shadow: 0 0 8px rgba(255,255,255,0.4);
+  }
+  #slider::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; cursor: pointer; border: none;
+    box-shadow: 0 0 8px rgba(255,255,255,0.4);
+  }
+
+  /* Credit line */
+  #credit {
+    position: absolute; bottom: 70px; right: 12px;
+    color: rgba(255,255,255,0.3); font-size: 11px;
+    z-index: 10;
+  }
+  #credit a {
+    color: rgba(255,255,255,0.4); text-decoration: none;
+    transition: color 0.2s;
+  }
+  #credit a:hover { color: rgba(255,255,255,0.7); }
+
+  /* Bias disclaimer */
+  #disclaimer {
+    position: absolute; bottom: 70px; left: 12px;
+    color: rgba(255,255,255,0.3); font-size: 11px;
+    font-style: italic; max-width: 500px;
+    z-index: 10; pointer-events: none;
+  }
+
+  /* Tooltip */
+  #tooltip {
+    position: absolute; pointer-events: none; z-index: 20;
+    background: rgba(0,0,0,0.8); color: #fff;
+    padding: 6px 10px; border-radius: 4px; font-size: 12px;
+    display: none; white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  /* Loading overlay */
+  #loading {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: #0a0a0a; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.5); font-size: 14px;
+    transition: opacity 0.5s;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="stats">
+  <div id="title"><a href="https://github.com/SharathSivamalaisamy/groundsource" target="_blank" rel="noopener">Global Flash Floods 2000–2026</a></div>
+  <div id="counter">Year: <span id="year-display">2000</span> &nbsp;|&nbsp; Events: <span id="event-count">0</span></div>
+</div>
+
+<div id="controls">
+  <button id="play-btn" aria-label="Play">&#9654;</button>
+  <input type="range" id="slider" min="2000" max="2026" value="2000" step="1">
+  <div id="year-label">2000</div>
+</div>
+
+<div id="disclaimer">Growth in detected events primarily reflects expansion of digital news coverage, not a proportional increase in flooding.</div>
+<div id="credit">Data: <a href="https://research.google/blog/introducing-groundsource-turning-news-reports-into-data-with-gemini/" target="_blank" rel="noopener">Google Groundsource</a> &nbsp;|&nbsp; Built with <a href="https://github.com/SharathSivamalaisamy/groundsource" target="_blank" rel="noopener">groundsource</a></div>
+<div id="tooltip"></div>
+<div id="loading">Loading data...</div>
+
+<script>
+const DATA_PATH = 'data/';
+const cache = {};
+let summary = {};
+let currentYear = 2000;
+let playing = false;
+let playInterval = null;
+
+// Color scale: dark blue → cyan → yellow → red
+function getColor(count, maxCount) {
+  const t = Math.min(1, Math.pow(count / maxCount, 0.4)); // power curve for better spread
+  if (t < 0.25) {
+    const s = t / 0.25;
+    return [10 + 30*s, 20 + 80*s, 120 + 80*s, 160 + 40*s]; // dark blue → blue
+  } else if (t < 0.5) {
+    const s = (t - 0.25) / 0.25;
+    return [40 - 20*s, 100 + 155*s, 200 - 40*s, 200 + 20*s]; // blue → cyan
+  } else if (t < 0.75) {
+    const s = (t - 0.5) / 0.25;
+    return [20 + 235*s, 255, 160 - 140*s, 220]; // cyan → yellow
+  } else {
+    const s = (t - 0.75) / 0.25;
+    return [255, 255 - 200*s, 20 - 20*s, 230 + 25*s]; // yellow → red
+  }
+}
+
+// DOM refs
+const slider = document.getElementById('slider');
+const yearLabel = document.getElementById('year-label');
+const yearDisplay = document.getElementById('year-display');
+const eventCount = document.getElementById('event-count');
+const playBtn = document.getElementById('play-btn');
+const tooltip = document.getElementById('tooltip');
+const loading = document.getElementById('loading');
+
+// Deck.gl setup with MapLibre (free, no token needed)
+const deckgl = new deck.DeckGL({
+  container: 'map',
+  mapStyle: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+  initialViewState: {
+    longitude: 30,
+    latitude: 20,
+    zoom: 1.8,
+    pitch: 0,
+    bearing: 0,
+    minZoom: 1.5,
+    maxZoom: 8,
+  },
+  controller: true,
+  layers: [],
+  getTooltip: null,
+});
+
+async function loadYear(year) {
+  if (cache[year]) return cache[year];
+  const resp = await fetch(`${DATA_PATH}${year}.json`);
+  const data = await resp.json();
+  cache[year] = data;
+  return data;
+}
+
+async function loadSummary() {
+  const resp = await fetch(`${DATA_PATH}summary.json`);
+  summary = await resp.json();
+}
+
+function updateLayer(data, year) {
+  const maxCount = Math.max(...data.map(d => d.c));
+
+  const layer = new deck.ScatterplotLayer({
+    id: 'floods',
+    data: data,
+    getPosition: d => [d.lon, d.lat],
+    getRadius: d => {
+      const base = 30000; // base radius in meters
+      const scale = Math.pow(d.c / maxCount, 0.3);
+      return base + scale * 70000;
+    },
+    getFillColor: d => getColor(d.c, maxCount),
+    radiusMinPixels: 3,
+    radiusMaxPixels: 40,
+    opacity: 0.85,
+    pickable: true,
+    antialiasing: true,
+    parameters: {
+      blend: true,
+      blendFunc: [770, 1], // additive blending for glow effect
+    },
+  });
+
+  deckgl.setProps({
+    layers: [layer],
+    getTooltip: ({object}) => {
+      if (!object) return null;
+      return {
+        html: `<b>${object.c.toLocaleString()}</b> events`,
+        style: {
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          color: '#fff',
+          fontSize: '12px',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          border: '1px solid rgba(255,255,255,0.1)',
+        }
+      };
+    }
+  });
+}
+
+function updateUI(year) {
+  yearDisplay.textContent = year;
+  yearLabel.textContent = year;
+  slider.value = year;
+  const count = summary[year] || 0;
+  eventCount.textContent = count.toLocaleString();
+}
+
+async function setYear(year) {
+  currentYear = year;
+  updateUI(year);
+  const data = await loadYear(year);
+  updateLayer(data, year);
+}
+
+// Preload all years for smooth scrubbing
+async function preloadAll() {
+  await loadSummary();
+  // Load first year immediately
+  await setYear(2000);
+  loading.classList.add('hidden');
+
+  // Preload rest in background
+  for (let y = 2001; y <= 2026; y++) {
+    loadYear(y); // fire-and-forget
+  }
+}
+
+// Slider
+slider.addEventListener('input', (e) => {
+  setYear(parseInt(e.target.value));
+});
+
+// Play/pause
+function togglePlay() {
+  if (playing) {
+    clearInterval(playInterval);
+    playBtn.innerHTML = '&#9654;'; // play icon
+    playing = false;
+  } else {
+    playBtn.innerHTML = '&#9646;&#9646;'; // pause icon
+    playing = true;
+    if (currentYear >= 2026) currentYear = 1999;
+    playInterval = setInterval(() => {
+      const next = currentYear + 1;
+      if (next > 2026) {
+        togglePlay();
+        return;
+      }
+      setYear(next);
+    }, 1500);
+  }
+}
+
+playBtn.addEventListener('click', togglePlay);
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowRight' && !playing) setYear(Math.min(2026, currentYear + 1));
+  if (e.code === 'ArrowLeft' && !playing) setYear(Math.max(2000, currentYear - 1));
+});
+
+// Start
+preloadAll();
+</script>
+</body>
+</html>
